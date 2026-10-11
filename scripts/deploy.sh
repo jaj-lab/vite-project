@@ -39,7 +39,6 @@ else
     echo "DOCKER: Launching new $IMAGE container.."
     docker run -d --name $NAME -p 5173:5173 $IMAGE
 
-    exit 1
 fi
 
 echo
