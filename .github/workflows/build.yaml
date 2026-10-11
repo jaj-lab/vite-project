@@ -21,7 +21,6 @@ jobs:
 
       - name: Build CI image
         run: |
-          cd repo
           docker build \
             -t jajalab/vite-project:${{ github.sha }} \
             -t jajalab/vite-project:latest \
