@@ -43,19 +43,45 @@ else
 fi
 
 echo
+sleep 2
 echo "DOKER: Validating $NAME application.."
-if [ "$(curl --output /dev/null --silent --write-out '%{http_code}' http://localhost:5173)" = "200" ]; then
-  echo "$NAME application available"
-else
-  echo "$NAME application not available"
-  exit 1
-fi
+for i in {1..10}; do
+    HTTP_CODE=$(curl --output /dev/null --silent --write-out '%{http_code}' http://localhost:5173 || true)
+
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "$NAME application available"
+        break
+    fi
+
+    if [ "$i" -eq 10 ]; then
+        echo "$NAME application not available"
+        echo "HTTP status: $HTTP_CODE"
+        docker logs "$NAME"
+        exit 1
+    fi
+
+    echo "Application not ready yet. Attempt $i/10. Retrying in 1 second.."
+    sleep 1
+done
 
 echo
+sleep 2
 echo "NGINX: Validating.."
-if [ "$(curl --output /dev/null --silent --write-out '%{http_code}' http://localhost)" = "200" ]; then
-  echo "$NAME application available"
-else
-  echo "$NAME application not available"
-  exit 1
-fi
+for i in {1..10}; do
+    HTTP_CODE=$(curl --output /dev/null --silent --write-out '%{http_code}' http://localhost || true)
+
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "$NAME application available"
+        break
+    fi
+
+    if [ "$i" -eq 10 ]; then
+        echo "$NAME application not available"
+        echo "HTTP status: $HTTP_CODE"
+        systemctl status nginx
+        exit 1
+    fi
+
+    echo "Application not ready yet. Attempt $i/10. Retrying in 1 second.."
+    sleep 1
+done
