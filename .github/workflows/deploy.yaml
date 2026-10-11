@@ -1,0 +1,80 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Login to DockerHub
+        run: |
+          echo "${{ secrets.REGISTRY_TOKEN }}" | docker login \
+            -u "${{ secrets.REGISTRY_USER }}" \
+            --password-stdin
+
+      - name: Build CI image
+        run: |
+          docker build \
+            -t jajalab/vite-project:${{ github.sha }} \
+            -t jajalab/vite-project:latest \
+            .
+
+      - name: Push CI image
+        run: |
+          docker push jajalab/vite-project:${{ github.sha }}
+          docker push jajalab/vite-project:latest
+
+  deploy:
+      runs-on: ubuntu-latest
+      needs: build
+
+      steps:
+        - name: Connect to Tailscale (for access to VM)
+          uses: tailscale/github-action@v4
+          with:
+            oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+            oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+            tags: tag:ci
+
+        - name: Download deployment script
+          run: |
+            curl -fsSL \
+              https://raw.githubusercontent.com/jaj-lab/vite-project/main/scripts/deploy.sh \
+              -o deploy.sh
+
+        - name: Configure SSH
+          env:
+            DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          run: |
+            install -m 700 -d ~/.ssh
+            printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+
+        - name: Copy deployment script
+          env:
+            DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+            DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          run: |
+            ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+            scp \
+              -i ~/.ssh/deploy_key \
+              deploy.sh \
+              "$DEPLOY_USER@$DEPLOY_HOST:/tmp/deploy.sh"
+
+        - name: Run deployment
+          env:
+            DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+            DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          run: |
+            ssh \
+              -i ~/.ssh/deploy_key \
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              'chmod +x /tmp/deploy.sh && /tmp/deploy.sh'
